@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/weather_service.dart';
+import '../models/city_data.dart';
 import '../services/user_activity_service.dart';
 import '../theme/app_theme.dart';
 
@@ -124,63 +125,143 @@ class _WeatherScreenState extends State<WeatherScreen> with TickerProviderStateM
 
   // Şehir seçimi dialogu
   void _showCitySelectionDialog() {
-    final TextEditingController cityController = TextEditingController(text: _selectedCity ?? '');
+    final TextEditingController searchController = TextEditingController();
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Şehir Seç'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: cityController,
-                decoration: const InputDecoration(
-                  labelText: 'Şehir Adı',
-                  hintText: 'Örn: İstanbul, Ankara',
-                  border: OutlineInputBorder(),
-                ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          String currentQuery = searchController.text.trim();
+
+          String normalize(String text) {
+            return text.toLowerCase()
+              .replaceAll('ğ', 'g')
+              .replaceAll('ü', 'u')
+              .replaceAll('ş', 's')
+              .replaceAll('ı', 'i')
+              .replaceAll('i', 'i')
+              .replaceAll('ö', 'o')
+              .replaceAll('ç', 'c');
+          }
+
+          List<CityData> getFilteredCities() {
+            final cities = CityData.getTurkishCities();
+            if (currentQuery.isEmpty) {
+              return cities;
+            }
+            final normalizedQuery = normalize(currentQuery);
+            return cities.where((city) {
+              return normalize(city.name).contains(normalizedQuery) ||
+                     normalize(city.region).contains(normalizedQuery);
+            }).toList();
+          }
+
+          final filteredCities = getFilteredCities();
+
+          return DraggableScrollableSheet(
+            initialChildSize: 0.9,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (_, controller) => Container(
+              decoration: const BoxDecoration(
+                color: AppTheme.backgroundColor,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              const SizedBox(height: 16),
-              const Text('Popüler Şehirler:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 200,
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: WeatherService.getPopularTurkishCities().length,
-                  itemBuilder: (context, index) {
-                    final city = WeatherService.getPopularTurkishCities()[index];
-                    return ListTile(
-                      title: Text(city),
-                      onTap: () {
-                        cityController.text = city;
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: TextField(
+                      controller: searchController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Şehir ara... (81 il)',
+                        prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.grey),
+                          onPressed: () {
+                            searchController.clear();
+                            setStateModal(() {});
+                          },
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      onChanged: (value) {
+                         setStateModal(() {});
                       },
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                  Expanded(
+                    child: filteredCities.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.search_off, size: 64, color: Colors.grey.shade300),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Şehir bulunamadı',
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            key: ValueKey('list_${currentQuery.length}'), 
+                            controller: controller, // DraggableScrollableSheet controller
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            itemCount: filteredCities.length,
+                            separatorBuilder: (context, index) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final city = filteredCities[index];
+                              return ListTile(
+                                contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                leading: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.location_city,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                                title: Text(
+                                  city.name,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                                subtitle: Text(city.region),
+                                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _loadWeatherData(city.name);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('İptal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (cityController.text.isNotEmpty) {
-                Navigator.of(context).pop();
-                _loadWeatherData(cityController.text.trim());
-              }
-            },
-            child: const Text('Seç'),
-          ),
-        ],
+            ),
+          );
+        },
       ),
     );
   }
