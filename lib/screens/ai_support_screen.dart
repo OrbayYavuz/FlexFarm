@@ -698,64 +698,84 @@ class _AISupportScreenState extends State<AISupportScreen> with TickerProviderSt
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (_, controller) => Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.backgroundColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          String currentQuery = _searchController.text.trim();
+
+          String normalize(String text) {
+            return text.toLowerCase()
+              .replaceAll('ğ', 'g')
+              .replaceAll('ü', 'u')
+              .replaceAll('ş', 's')
+              .replaceAll('ı', 'i')
+              .replaceAll('i', 'i')
+              .replaceAll('ö', 'o')
+              .replaceAll('ç', 'c');
+          }
+
+          List<CityData> getFilteredCities() {
+            final cities = CityData.getTurkishCities();
+            if (currentQuery.isEmpty) {
+              return cities;
+            }
+            final normalizedQuery = normalize(currentQuery);
+            return cities.where((city) {
+              return normalize(city.name).contains(normalizedQuery) ||
+                     normalize(city.region).contains(normalizedQuery);
+            }).toList();
+          }
+
+          final filteredCities = getFilteredCities();
+
+          return DraggableScrollableSheet(
+            initialChildSize: 0.9,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (_, controller) => Container(
+              decoration: const BoxDecoration(
+                color: AppTheme.backgroundColor,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: TextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: 'Şehir ara... (81 il)',
-                    prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.grey),
-                      onPressed: () {
-                        _searchController.clear();
-                        // Modal içinde state yenilemek için
-                        (context as Element).markNeedsBuild();
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Şehir ara... (81 il)',
+                        prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.grey),
+                          onPressed: () {
+                            _searchController.clear();
+                            setStateModal(() {});
+                          },
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      onChanged: (value) {
+                         setStateModal(() {});
                       },
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
                   ),
-                  onChanged: (value) {
-                    // Modal içinde state yenilemek için StatefulBuilder kullanmalıyız aslında
-                    // Ama basitlik için parent state'i güncelliyoruz, 
-                    // bu da filteredCities'i etkiliyor, sonra modal yeniden build ediliyor
-                    setState(() {
-                      _searchQuery = value;
-                    });
-                  },
-                ),
-              ),
-              Expanded(
-                child: StatefulBuilder(
-                  builder: (context, setStateModal) {
-                    // Search query değiştiğinde ana widget'taki liste güncelleniyor
-                    return _filteredCities.isEmpty
+                  Expanded(
+                    child: filteredCities.isEmpty
                         ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -770,12 +790,15 @@ class _AISupportScreenState extends State<AISupportScreen> with TickerProviderSt
                             ),
                           )
                         : ListView.separated(
-                            controller: controller, // DraggableScrollableSheet için gerekli
+                            // Key added to force rebuild when list changes drastically
+                            key: ValueKey('list_${currentQuery.length}'), 
+                            controller: controller,
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            itemCount: _filteredCities.length,
+                            itemCount: filteredCities.length,
                             separatorBuilder: (context, index) => const Divider(height: 1),
                             itemBuilder: (context, index) {
-                              final city = _filteredCities[index];
+                              if (index >= filteredCities.length) return const SizedBox(); // Safe guard
+                              final city = filteredCities[index];
                               return ListTile(
                                 contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                                 leading: Container(
@@ -801,16 +824,15 @@ class _AISupportScreenState extends State<AISupportScreen> with TickerProviderSt
                                 },
                               );
                             },
-                          );
-                  },
-                ),
+                          ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     ).then((_) {
-      // Modal kapanınca aramayı temizle
       _searchController.clear();
       setState(() {
         _searchQuery = '';
