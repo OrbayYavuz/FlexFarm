@@ -321,11 +321,11 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           : Stack(
               children: [
-                // Ana İçerik - PageView ile kaydırmalı geçiş
-                PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(), // Sadece menüden geçiş olsun
-                  onPageChanged: (index) {
+                  // Ana İçerik - PageView ile kaydırmalı geçiş
+                  PageView(
+                    controller: _pageController,
+                    // physics: const NeverScrollableScrollPhysics(), // Kaldırıldı: Kaydırma aktif
+                    onPageChanged: (index) {
                     setState(() {
                       _currentIndex = index;
                     });
