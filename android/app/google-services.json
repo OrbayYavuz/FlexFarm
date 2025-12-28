@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "610700402568",
+    "project_id": "flexfarm-e4e24",
+    "storage_bucket": "flexfarm-e4e24.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:610700402568:android:25e37e519bddeb08c1e43d",
+        "android_client_info": {
+          "package_name": "com.example.flex_tarm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMCTlzd6NrG3uJP3Sjdppu1tVkf6cFb20"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

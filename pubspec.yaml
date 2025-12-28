@@ -1,0 +1,62 @@
+name: flex_tarm
+description: A Flutter app for Flex Tarm - agricultural management platform.
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  shared_preferences: ^2.2.2
+  # http is still useful for general purposes, so we keep it.
+  http: ^1.1.0
+  # image_picker is needed to select photos for analysis.
+  image_picker: ^1.0.8
+  # OpenAI-compatible API support
+  dio: ^5.4.0
+  # Supabase for authentication and database
+  supabase_flutter: ^2.3.4
+  # Environment variables
+  flutter_dotenv: ^5.1.0
+  # Local notifications for reminders
+  flutter_local_notifications: ^17.2.2
+  timezone: ^0.9.4
+  # Firebase for Push Notifications
+  firebase_core: ^2.24.2
+  firebase_messaging: ^14.7.9
+  cached_network_image: ^3.4.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+    - assets/images/
+
+# App Icon Configuration
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/logo.png"
+  web:
+    generate: true
+    image_path: "assets/images/logo.png"
+    background_color: "#FFFFFF"
+    theme_color: "#4CAF50"
+  windows:
+    generate: true
+    image_path: "assets/images/logo.png"
+    icon_size: 48
