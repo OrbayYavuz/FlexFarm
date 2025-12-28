@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async'; // Timer için
 import '../services/weather_service.dart';
 import '../models/city_data.dart';
 import '../services/user_activity_service.dart';
@@ -22,6 +23,7 @@ class _WeatherScreenState extends State<WeatherScreen> with TickerProviderStateM
   String? _errorMessage;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  Timer? _refreshTimer; // Otomatik yenileme için timer
 
   @override
   void initState() {
@@ -38,11 +40,20 @@ class _WeatherScreenState extends State<WeatherScreen> with TickerProviderStateM
       curve: Curves.easeInOut,
     ));
     _loadSavedCity();
+
+    // Her 10 dakikada bir verileri güncelle
+    _refreshTimer = Timer.periodic(const Duration(minutes: 10), (timer) {
+      if (_selectedCity != null) {
+        print('⏰ Otomatik hava durumu güncellemesi başlatılıyor...');
+        _loadWeatherData(_selectedCity!);
+      }
+    });
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _refreshTimer?.cancel(); // Timer'ı iptal et
     super.dispose();
   }
 

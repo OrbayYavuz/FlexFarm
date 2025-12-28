@@ -11,6 +11,12 @@ class WeatherService {
   static DateTime? _lastWeatherUpdate;
   static DateTime? _lastAgriculturalUpdate;
   static const Duration _cacheDuration = Duration(minutes: 10); // 10 dakika cache
+  
+  // Cache için son konum bilgileri
+  static double? _lastLat;
+  static double? _lastLon;
+
+  // Şehir isminden koordinatları alcache
 
   // ========== ŞEHİR KOORDİNATLARI ==========
   
@@ -63,15 +69,19 @@ class WeatherService {
     required double longitude,
   }) async {
     try {
+      // Koordinat kontrolü - Konum değiştiyse cache'i geçersiz say
+      bool locationChanged = _lastLat != latitude || _lastLon != longitude;
+
       // Cache kontrolü
-      if (_cachedWeatherData != null && 
+      if (!locationChanged &&
+          _cachedWeatherData != null && 
           _lastWeatherUpdate != null && 
           DateTime.now().difference(_lastWeatherUpdate!) < _cacheDuration) {
         print('🌤️ Cache\'den hava durumu verisi alınıyor');
         return _cachedWeatherData;
       }
 
-      print('🌤️ Open Meteo API\'den hava durumu verisi alınıyor...');
+      print('🌤️ Open Meteo API\'den hava durumu verisi alınıyor... (Konum değişti: $locationChanged)');
       
       final url = Uri.parse(
         'https://api.open-meteo.com/v1/forecast?'
@@ -90,9 +100,11 @@ class WeatherService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         
-        // Cache'e kaydet
+        // Cache'e ve konumu kaydet
         _cachedWeatherData = data;
         _lastWeatherUpdate = DateTime.now();
+        _lastLat = latitude;
+        _lastLon = longitude;
         
         print('✅ Open Meteo API\'den hava durumu verisi alındı ve cache\'e kaydedildi');
         return data;
@@ -112,15 +124,19 @@ class WeatherService {
     required double longitude,
   }) async {
     try {
+      // Koordinat kontrolü
+      bool locationChanged = _lastLat != latitude || _lastLon != longitude;
+
       // Cache kontrolü
-      if (_cachedAgriculturalData != null && 
+      if (!locationChanged &&
+          _cachedAgriculturalData != null && 
           _lastAgriculturalUpdate != null && 
           DateTime.now().difference(_lastAgriculturalUpdate!) < _cacheDuration) {
         print('🌾 Cache\'den tarımsal veri alınıyor');
         return _cachedAgriculturalData;
       }
 
-      print('🌾 Open Meteo API\'den tarımsal veri alınıyor...');
+      print('🌾 Open Meteo API\'den tarımsal veri alınıyor... (Konum değişti: $locationChanged)');
       
       final url = Uri.parse(
         'https://api.open-meteo.com/v1/forecast?'
