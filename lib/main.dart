@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:ui';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+// import 'package:flutter_dotenv/flutter_dotenv.dart'; // Removed for Edge Function security
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -32,12 +32,8 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Environment variables'ı yükle (varsa)
-  try {
-    await dotenv.load(fileName: ".env");
-  } catch (e) {
-    print('Warning: .env file not found or corrupted, using default values');
-  }
+  // Environment variables removal - No longer needed
+
 
   // Firebase'i başlat
   try {

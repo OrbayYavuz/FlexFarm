@@ -7,8 +7,9 @@ import 'secure_api_service.dart';
 class AIService {
   // Groq AI - API key is now securely stored in Supabase Edge Functions
   // No API key in client code for security
-  static String get _apiKey => '';
-  static const String _apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+  // Groq AI - API key is managed by Supabase Edge Function
+  // No API key in client code for security
+
 
   // Conversation history for context awareness
   static final List<Map<String, String>> _conversationHistory = [];
@@ -136,25 +137,22 @@ lib/services/ai_service.dart dosyasındaki _apiKey değişkenini güncelleyin.
 
   static Future<String> getAIResponse(String userMessage) async {
     try {
-      // Güvenli API çağrısı yap (Groq API)
-      final response = await SecureApiService.makeSecureApiCall(
-        endpoint: _apiUrl,
-        data: {
-          'model': 'llama-3.3-70b-versatile',
-          'messages': [
-            {
-              'role': 'system',
-              'content': 'Sen Türkiye tarım konusunda uzman bir yapay zeka asistanısın. Kullanıcının sorularını Türkçe olarak detaylı, pratik ve anlaşılır şekilde yanıtla.'
-            },
-            {
-              'role': 'user',
-              'content': userMessage,
-            },
-          ],
-          'temperature': 0.7,
-          'max_tokens': 2048,
-        },
-      );
+      // Güvenli API çağrısı yap (Groq Edge Function)
+      final response = await SecureApiService.invokeGroq({
+        'model': 'llama-3.3-70b-versatile',
+        'messages': [
+          {
+            'role': 'system',
+            'content': 'Sen Türkiye tarım konusunda uzman bir yapay zeka asistanısın. Kullanıcının sorularını Türkçe olarak detaylı, pratik ve anlaşılır şekilde yanıtla.'
+          },
+          {
+            'role': 'user',
+            'content': userMessage,
+          },
+        ],
+        'temperature': 0.7,
+        'max_tokens': 2048,
+      });
 
       if (response['choices'] != null && response['choices'].isNotEmpty) {
         return response['choices'][0]['message']['content'];
@@ -163,26 +161,20 @@ lib/services/ai_service.dart dosyasındaki _apiKey değişkenini güncelleyin.
       }
     } catch (e) {
       // Fallback olarak ücretsiz AI yanıtları
+      print('AI Service Hatası: $e');
       return _getFreeAIResponse(userMessage);
     }
   }
 
   static Future<String> analyzePlantImage(Uint8List imageBytes) async {
     // API key is now securely stored in Supabase Edge Functions
-    // No need to check for hardcoded keys
-
+    
     try {
       // Convert image to base64
       final String base64Image = base64Encode(imageBytes);
 
-      final response = await http.post(
-        Uri.parse(_apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
-        body: jsonEncode({
-          'model': 'llama-3.1-70b-versatile',
+      final response = await SecureApiService.invokeGroq({
+          'model': 'llama-3.2-11b-vision-preview', // Vision yeteneği olan model
           'messages': [
             {
               'role': 'system',
@@ -206,15 +198,14 @@ lib/services/ai_service.dart dosyasındaki _apiKey değişkenini güncelleyin.
           ],
           'temperature': 0.7,
           'max_tokens': 2048,
-        }),
-      );
+        });
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['choices'][0]['message']['content'];
+      if (response['choices'] != null && response['choices'].isNotEmpty) {
+        return response['choices'][0]['message']['content'];
       } else {
-        return 'Görüntü analizi servisine bağlanırken bir hata oluştu: ${response.statusCode}\n\nLütfen fotoğrafı tekrar yükleyin.';
+         return 'Görüntü analizi yapılırken beklenmeyen bir yanıt alındı.';
       }
+
     } catch (e) {
       return 'Görüntü analizi servisine bağlanırken bir hata oluştu: ${e.toString()}\n\nLütfen internet bağlantınızı kontrol edin ve tekrar deneyin.';
     }
