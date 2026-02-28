@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
 import '../models/crop_guide.dart';
 import 'secure_api_service.dart';
 
@@ -163,6 +162,53 @@ lib/services/ai_service.dart dosyasındaki _apiKey değişkenini güncelleyin.
       // Fallback olarak ücretsiz AI yanıtları
       print('AI Service Hatası: $e');
       return _getFreeAIResponse(userMessage);
+    }
+  }
+
+  // Finansal ve Verim Danışmanlık Motoru (Aşama 3)
+  static Future<String> getFinancialAdvisory({
+    required String cropName,
+    required double expectedYieldKg,
+    required double minRevenue,
+    required double maxRevenue,
+  }) async {
+    try {
+      final prompt = '''
+Benim tarlamda şu an $cropName ekili. 
+Sisteminizin hesaplamalarına göre tahmini hasadım: ${expectedYieldKg.toStringAsFixed(1)} KG.
+Güncel Türkiye Hal/Borsa fiyatlarına göre bu mahsulün bugünkü piyasa değeri Minimum ${minRevenue.toStringAsFixed(0)} TL ile Maksimum ${maxRevenue.toStringAsFixed(0)} TL arasında değişiyor.
+
+Bir tarım ve finans uzmanı olarak;
+1. Bu mahsulü taban fiyattan değil de tavan fiyattan (en yüksek kalite) satabilmem için son haftalarda nelere dikkat etmeliyim? (Gübre, su, hasat zamanlaması)
+2. Bu mahsul şu an piyasada değerli mi, satmak için bekletmeli miyim yoksa hemen elden mi çıkarmalıyım?
+3. Bu elde edeceğim geliri bir sonraki ekim sezonunda tarlamı geliştirmek için nasıl yatırıma dönüştürmeliyim?
+
+Lütfen çok kısa, madde madde, heyecan verici ve net bir Türkçe ile yanıtla.
+''';
+
+      final response = await SecureApiService.invokeGroq({
+        'model': 'llama-3.3-70b-versatile',
+        'messages': [
+          {
+            'role': 'system',
+            'content': 'Sen Türkiye tarım borsası ve ziraat mühendisliği konusunda uzman CEO seviyesinde bir finansal danışmansın. Madde madde, çok net ve profesyonel tavsiyeler verirsin.'
+          },
+          {
+            'role': 'user',
+            'content': prompt,
+          },
+        ],
+        'temperature': 0.8,
+        'max_tokens': 1500,
+      });
+
+      if (response['choices'] != null && response['choices'].isNotEmpty) {
+        return response['choices'][0]['message']['content'];
+      }
+      return 'Danışmanlık verisi alınamadı.';
+    } catch (e) {
+      print('AI Financial Advisory Hatası: $e');
+      return 'Şu an piyasa dalgalanmaları nedeniyle AI sunucularına ulaşılamıyor. Lütfen daha sonra tekrar deneyin.';
     }
   }
 

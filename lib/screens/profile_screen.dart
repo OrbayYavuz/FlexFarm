@@ -225,7 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           shape: BoxShape.circle,
                           border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2), width: 2),
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.person,
                           size: 40,
                           color: AppTheme.primaryColor,
@@ -529,7 +529,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       text: TextSpan(
                         children: [
                           if (isMe)
-                            TextSpan(
+                            const TextSpan(
                               text: 'Sen: ',
                               style: TextStyle(
                                 color: AppTheme.primaryColor,

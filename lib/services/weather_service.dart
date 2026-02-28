@@ -20,7 +20,92 @@ class WeatherService {
 
   // ========== ŞEHİR KOORDİNATLARI ==========
   
-  /// Şehir adından koordinatları al (Nominatim API'den)
+  // Çevrimdışı / Hata Durumu İçin 81 İlin Yedek Koordinatları
+  static const Map<String, Map<String, double>> _fallbackCoordinates = {
+    'Adana': {'latitude': 37.0000, 'longitude': 35.3213},
+    'Adıyaman': {'latitude': 37.7648, 'longitude': 38.2786},
+    'Afyonkarahisar': {'latitude': 38.7507, 'longitude': 30.5567},
+    'Ağrı': {'latitude': 39.7191, 'longitude': 43.0503},
+    'Amasya': {'latitude': 40.6499, 'longitude': 35.8353},
+    'Ankara': {'latitude': 39.9208, 'longitude': 32.8541},
+    'Antalya': {'latitude': 36.8969, 'longitude': 30.7133},
+    'Artvin': {'latitude': 41.1828, 'longitude': 41.8183},
+    'Aydın': {'latitude': 37.8380, 'longitude': 27.8456},
+    'Balıkesir': {'latitude': 39.6484, 'longitude': 27.8826},
+    'Bilecik': {'latitude': 40.1451, 'longitude': 29.9798},
+    'Bingöl': {'latitude': 38.8847, 'longitude': 40.4939},
+    'Bitlis': {'latitude': 38.4006, 'longitude': 42.1095},
+    'Bolu': {'latitude': 40.7392, 'longitude': 31.6116},
+    'Burdur': {'latitude': 37.7183, 'longitude': 30.2823},
+    'Bursa': {'latitude': 40.1824, 'longitude': 29.0671},
+    'Çanakkale': {'latitude': 40.1553, 'longitude': 26.4142},
+    'Çankırı': {'latitude': 40.6013, 'longitude': 33.6134},
+    'Çorum': {'latitude': 40.5506, 'longitude': 34.9556},
+    'Denizli': {'latitude': 37.7765, 'longitude': 29.0864},
+    'Diyarbakır': {'latitude': 37.9144, 'longitude': 40.2306},
+    'Edirne': {'latitude': 41.6771, 'longitude': 26.5557},
+    'Elazığ': {'latitude': 38.6810, 'longitude': 39.2264},
+    'Erzincan': {'latitude': 39.7392, 'longitude': 39.4902},
+    'Erzurum': {'latitude': 39.9043, 'longitude': 41.2679},
+    'Eskişehir': {'latitude': 39.7767, 'longitude': 30.5206},
+    'Gaziantep': {'latitude': 37.0662, 'longitude': 37.3833},
+    'Giresun': {'latitude': 40.9128, 'longitude': 38.3895},
+    'Gümüşhane': {'latitude': 40.4608, 'longitude': 39.4814},
+    'Hakkâri': {'latitude': 37.5833, 'longitude': 43.7333},
+    'Hatay': {'latitude': 36.4018, 'longitude': 36.3498},
+    'Isparta': {'latitude': 37.7648, 'longitude': 30.5566},
+    'Mersin': {'latitude': 36.8121, 'longitude': 34.6415},
+    'İstanbul': {'latitude': 41.0082, 'longitude': 28.9784},
+    'İzmir': {'latitude': 38.4192, 'longitude': 27.1287},
+    'Kars': {'latitude': 40.6013, 'longitude': 43.0975},
+    'Kastamonu': {'latitude': 41.3887, 'longitude': 33.7827},
+    'Kayseri': {'latitude': 38.7312, 'longitude': 35.4787},
+    'Kırklareli': {'latitude': 41.7333, 'longitude': 27.2167},
+    'Kırşehir': {'latitude': 39.1425, 'longitude': 34.1709},
+    'Kocaeli': {'latitude': 40.7654, 'longitude': 29.9408},
+    'Konya': {'latitude': 37.8667, 'longitude': 32.4833},
+    'Kütahya': {'latitude': 39.4167, 'longitude': 29.9833},
+    'Malatya': {'latitude': 38.3552, 'longitude': 38.3095},
+    'Manisa': {'latitude': 38.6120, 'longitude': 27.4260},
+    'Kahramanmaraş': {'latitude': 37.5858, 'longitude': 36.9371},
+    'Mardin': {'latitude': 37.3212, 'longitude': 40.7245},
+    'Muğla': {'latitude': 37.2153, 'longitude': 28.3636},
+    'Muş': {'latitude': 38.7346, 'longitude': 41.4910},
+    'Nevşehir': {'latitude': 38.6244, 'longitude': 34.7144},
+    'Niğde': {'latitude': 37.9667, 'longitude': 34.6833},
+    'Ordu': {'latitude': 40.9862, 'longitude': 37.8797},
+    'Rize': {'latitude': 41.0201, 'longitude': 40.5234},
+    'Sakarya': {'latitude': 40.7569, 'longitude': 30.3783},
+    'Samsun': {'latitude': 41.2867, 'longitude': 36.33},
+    'Siirt': {'latitude': 37.9333, 'longitude': 41.95},
+    'Sinop': {'latitude': 42.0231, 'longitude': 35.1531},
+    'Sivas': {'latitude': 39.7477, 'longitude': 37.0179},
+    'Tekirdağ': {'latitude': 40.9833, 'longitude': 27.5167},
+    'Tokat': {'latitude': 40.3167, 'longitude': 36.55},
+    'Trabzon': {'latitude': 41.0015, 'longitude': 39.7178},
+    'Tunceli': {'latitude': 39.1079, 'longitude': 39.5401},
+    'Şanlıurfa': {'latitude': 37.15, 'longitude': 38.8},
+    'Uşak': {'latitude': 38.6823, 'longitude': 29.4082},
+    'Van': {'latitude': 38.4891, 'longitude': 43.3889},
+    'Yozgat': {'latitude': 39.8181, 'longitude': 34.8147},
+    'Zonguldak': {'latitude': 41.4504, 'longitude': 31.7829},
+    'Aksaray': {'latitude': 38.3687, 'longitude': 34.037},
+    'Bayburt': {'latitude': 40.2552, 'longitude': 40.2249},
+    'Karaman': {'latitude': 37.1811, 'longitude': 33.2222},
+    'Kırıkkale': {'latitude': 39.8468, 'longitude': 33.5153},
+    'Batman': {'latitude': 37.8812, 'longitude': 41.1351},
+    'Şırnak': {'latitude': 37.5228, 'longitude': 42.4594},
+    'Bartın': {'latitude': 41.6344, 'longitude': 32.3375},
+    'Ardahan': {'latitude': 41.1105, 'longitude': 42.7022},
+    'Iğdır': {'latitude': 39.9237, 'longitude': 44.045},
+    'Yalova': {'latitude': 40.65, 'longitude': 29.2667},
+    'Karabük': {'latitude': 41.2061, 'longitude': 32.6234},
+    'Kilis': {'latitude': 36.7184, 'longitude': 37.1147},
+    'Osmaniye': {'latitude': 37.0742, 'longitude': 36.2475},
+    'Düzce': {'latitude': 40.8358, 'longitude': 31.1578}
+  };
+
+  /// Şehir adından koordinatları al (Nominatim API'den ve Yedek Listeden)
   static Future<Map<String, double>?> getCityCoordinates(String cityName) async {
     try {
       print('📍 Nominatim API\'den şehir koordinatları alınıyor: $cityName');
@@ -30,34 +115,32 @@ class WeatherService {
         'q=$cityName,Turkey&format=json&limit=1'
       );
 
-      print('📍 Nominatim URL: $url');
-      
       final response = await http.get(url, headers: {
         'User-Agent': 'FlexTarm/1.0',
-      });
+      }).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as List;
         
         if (data.isNotEmpty) {
-          final result = data[0];
-          final coordinates = {
-            'latitude': double.parse(result['lat']),
-            'longitude': double.parse(result['lon']),
-          };
-          print('✅ Koordinatlar bulundu: $coordinates');
-          return coordinates;
-        } else {
-          print('❌ Şehir bulunamadı: $cityName');
-          return null;
+           final result = data[0];
+           final coordinates = {
+             'latitude': double.parse(result['lat']),
+             'longitude': double.parse(result['lon']),
+           };
+           print('✅ Çevrimiçi Koordinatlar bulundu: $coordinates');
+           return coordinates;
         }
-      } else {
-        print('❌ Nominatim API hatası: ${response.statusCode}');
-        return null;
       }
+      
+      // API Bos donduyse veya 403 yediyse Fallback uzerinden don
+      print('⚠️ API yanıt vermedi. $cityName için yerel koordinatlara bakılıyor...');
+      return _fallbackCoordinates[cityName];
+      
     } catch (e) {
-      print('❌ Şehir koordinatları alınamadı: $e');
-      return null;
+      print('❌ Şehir koordinatları alınırken hata (İnternet Kopuk Olabilir): $e');
+      // İnternet sorunu yaşanırsa çökmesin, doğrudan yerel koordinat döndür
+      return _fallbackCoordinates[cityName];
     }
   }
 

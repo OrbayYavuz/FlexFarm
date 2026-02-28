@@ -27,7 +27,7 @@ class CropsService {
       // Sadece gerekli alanları seç (performans için)
       final response = await _supabase
           .from('crops')
-          .select('id, name, variety, planting_date, expected_harvest_date, city, notes, created_at, updated_at')
+          .select('id, name, variety, planting_date, expected_harvest_date, city, notes, area_sqm, created_at, updated_at')
           .eq('user_id', user.id)
           .order('created_at', ascending: false)
           .limit(100); // Maksimum 100 kayıt (performans için)
@@ -80,6 +80,7 @@ class CropsService {
     DateTime? expectedHarvestDate,
     required String city,
     String? notes,
+    double? areaSqm,
   }) async {
     try {
       final user = _supabase.auth.currentUser;
@@ -93,6 +94,7 @@ class CropsService {
         'expected_harvest_date': expectedHarvestDate?.toIso8601String().split('T')[0],
         'city': city,
         'notes': notes,
+        if (areaSqm != null) 'area_sqm': areaSqm,
       });
       
       // Cache'i temizle (yeni ekleme sonrası)

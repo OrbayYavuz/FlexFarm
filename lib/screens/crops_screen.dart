@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../services/crops_service.dart';
 import '../models/crop_guide.dart';
 import '../models/city_data.dart';
+import '../data/crop_database.dart';
+import '../services/yield_calculator_service.dart';
+import '../models/crop_price_data.dart';
+import '../services/market_price_service.dart';
 import '../services/ai_service.dart';
 import '../services/notification_service.dart';
 import '../services/reminders_service.dart';
@@ -84,6 +88,7 @@ class _CropsScreenState extends State<CropsScreen> with TickerProviderStateMixin
     final TextEditingController notesController = TextEditingController();
     final TextEditingController cropSearchController = TextEditingController();
     final TextEditingController citySearchController = TextEditingController();
+    final TextEditingController areaController = TextEditingController();
     String? selectedCropName;
     String? selectedCityName;
     DateTime? selectedPlantingDate;
@@ -212,6 +217,17 @@ class _CropsScreenState extends State<CropsScreen> with TickerProviderStateMixin
                         ),
                       ),
                     ],
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: areaController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Ekim Alanı (Metrekare) *',
+                        border: OutlineInputBorder(),
+                        hintText: 'Örn: 1000',
+                        prefixIcon: Icon(Icons.square_foot),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     // Şehir seçimi
                     const Text(
@@ -432,9 +448,11 @@ class _CropsScreenState extends State<CropsScreen> with TickerProviderStateMixin
                   onPressed: () async {
                     if (selectedCropName != null && 
                         selectedCityName != null &&
-                        selectedPlantingDate != null) {
+                        selectedPlantingDate != null &&
+                        areaController.text.isNotEmpty) {
                       
                       try {
+                        final parsedAreaSqm = double.tryParse(areaController.text) ?? 1000.0;
                         await CropsService.addCrop(
                           name: selectedCropName!,
                           variety: varietyController.text.isNotEmpty ? varietyController.text : null,
@@ -442,6 +460,7 @@ class _CropsScreenState extends State<CropsScreen> with TickerProviderStateMixin
                           expectedHarvestDate: selectedHarvestDate,
                           city: selectedCityName!,
                           notes: notesController.text.isNotEmpty ? notesController.text : null,
+                          areaSqm: parsedAreaSqm,
                         );
                         
                         // Yeni eklenen mahsulü al (hasat hatırlatıcıları için)
@@ -725,6 +744,131 @@ class _CropsScreenState extends State<CropsScreen> with TickerProviderStateMixin
                         daysSincePlanting,
                         Colors.purple,
                       ),
+                      if (crop['area_sqm'] != null && crop['area_sqm'] > 0) ...[
+                        const SizedBox(height: 12),
+                        _buildDetailCard(
+                          Icons.square_foot,
+                          'Ekim Alanı',
+                          '${crop['area_sqm']} m²',
+                          Colors.brown,
+                        ),
+                        const SizedBox(height: 12),
+                        FutureBuilder<CropPriceData?>(
+                          future: MarketPriceService.getLivePriceForCrop(
+                            CropDatabase.getCropByName(crop['name'] ?? '')?.id ?? 'crop_wheat'
+                          ),
+                          builder: (context, priceSnapshot) {
+                            final yieldResult = YieldCalculatorService.calculateYield(
+                              crop: CropDatabase.getCropByName(crop['name'] ?? '') ?? CropDatabase.getCropById('crop_wheat')!,
+                              areaInSqMeters: double.tryParse(crop['area_sqm'].toString()) ?? 0,
+                            );
+
+                            String revenueText = '';
+                            if (priceSnapshot.hasData && priceSnapshot.data != null) {
+                              final priceInfo = priceSnapshot.data!;
+                              final estimatedRevenueMin = yieldResult.finalExpectedYieldKg * priceInfo.minPricePerKg;
+                              final estimatedRevenueMax = yieldResult.finalExpectedYieldKg * priceInfo.maxPricePerKg;
+                              
+                              // Para Formatı (. kisaimi)
+                              String formatCurrency(double val) {
+                                if (val >= 1000000) return '${(val / 1000000).toStringAsFixed(2)} Milyon ₺';
+                                if (val >= 1000) return '${(val / 1000).toStringAsFixed(1)} Bin ₺';
+                                return '${val.toStringAsFixed(0)} ₺';
+                              }
+
+                              revenueText = '${formatCurrency(estimatedRevenueMin)} - ${formatCurrency(estimatedRevenueMax)}\n(Adana Hal Ort.)';
+                            } else {
+                              revenueText = 'Fiyat Verisi Bekleniyor...';
+                            }
+
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.amber.shade200),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.scale, color: Colors.amber.shade700),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Tahmini Hasat',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: Colors.amber.shade900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    yieldResult.getFormattedEstimatedYield(),
+                                    style: TextStyle(fontSize: 18, color: Colors.amber.shade900),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Divider(),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.payments_outlined, color: Colors.green.shade600),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Güncel Piyasa Değeri',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: Colors.green.shade800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  priceSnapshot.connectionState == ConnectionState.waiting 
+                                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                    : Text(
+                                        revenueText,
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                                      ),
+                                    
+                                  if (priceSnapshot.hasData && priceSnapshot.data != null) ...[
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () => _showAiFinancialAdvisor(
+                                          context, 
+                                          crop,
+                                          yieldResult.finalExpectedYieldKg,
+                                          yieldResult.finalExpectedYieldKg * priceSnapshot.data!.minPricePerKg,
+                                          yieldResult.finalExpectedYieldKg * priceSnapshot.data!.maxPricePerKg,
+                                        ),
+                                        icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                                        label: const Text(
+                                          'Yapay Zeka Analizi İste',
+                                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.indigo.shade600,
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          )
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }
+                        ),
+                      ],
                       if (crop['variety'] != null) ...[
                         const SizedBox(height: 12),
                         _buildDetailCard(
@@ -877,6 +1021,133 @@ class _CropsScreenState extends State<CropsScreen> with TickerProviderStateMixin
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showAiFinancialAdvisor(BuildContext context, Map<String, dynamic> crop, double expectedYieldKg, double minRev, double maxRev) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.indigo.shade50,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                border: Border(bottom: BorderSide(color: Colors.indigo.shade100)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.auto_awesome, color: Colors.indigo.shade700),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'AI Finansal Danışman',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          'Piyasa, Verim ve Strateji Analizi',
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        )
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: FutureBuilder<String>(
+                future: AIService.getFinancialAdvisory(
+                  cropName: crop['name'] ?? 'Bilinmiyor',
+                  expectedYieldKg: expectedYieldKg,
+                  minRevenue: minRev,
+                  maxRevenue: maxRev,
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 16),
+                          Text('Türkiye Borsa verileri analiz ediliyor...', style: TextStyle(color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (snapshot.hasError || !snapshot.hasData) {
+                    return const Center(child: Text('Danışmanlığa şu an ulaşılamıyor.'));
+                  }
+
+                  // Basit markdown parser (sadece kalın - bold - text render icin)
+                  List<TextSpan> _parseMarkdown(String text) {
+                    final List<TextSpan> spans = [];
+                    final pattern = RegExp(r'\*\*(.*?)\*\*');
+                    int lastMatchEnd = 0;
+
+                    for (final match in pattern.allMatches(text)) {
+                      if (match.start > lastMatchEnd) {
+                        spans.add(TextSpan(text: text.substring(lastMatchEnd, match.start)));
+                      }
+                      spans.add(TextSpan(
+                        text: match.group(1),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+                      ));
+                      lastMatchEnd = match.end;
+                    }
+                    if (lastMatchEnd < text.length) {
+                      spans.add(TextSpan(text: text.substring(lastMatchEnd)));
+                    }
+                    return spans;
+                  }
+
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(
+                          fontSize: 15,
+                          height: 1.5,
+                          color: Colors.black87,
+                        ),
+                        children: _parseMarkdown(snapshot.data!),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1234,6 +1505,33 @@ class _CropsScreenState extends State<CropsScreen> with TickerProviderStateMixin
                             fontWeight: FontWeight.w500,
                             color: AppTheme.textSecondary,
                           ),
+                        ),
+                      ),
+                    if (crop['area_sqm'] != null && crop['area_sqm'] > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.scale_outlined, size: 16, color: AppTheme.primaryColor),
+                            const SizedBox(width: 6),
+                            Text(
+                              YieldCalculatorService.calculateYield(
+                                crop: CropDatabase.getCropByName(crop['name'] ?? '') ?? CropDatabase.getCropById('crop_wheat')!,
+                                areaInSqMeters: double.tryParse(crop['area_sqm'].toString()) ?? 0,
+                              ).getFormattedEstimatedYield(),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryColor,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                   ],

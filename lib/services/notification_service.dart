@@ -264,7 +264,7 @@ class NotificationService {
       
       // Çok geçmiş tarihse iptal et (15 dk tolerans)
       if (reminderDateTZ.isBefore(now.subtract(const Duration(minutes: 15)))) {
-        print('Hatırlatıcı tarihi çok eski, zamanlanmadı: $title (${reminderDateTZ})');
+        print('Hatırlatıcı tarihi çok eski, zamanlanmadı: $title ($reminderDateTZ)');
         return;
       }
       
