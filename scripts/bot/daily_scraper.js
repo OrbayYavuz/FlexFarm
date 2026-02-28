@@ -17,74 +17,86 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Antalya Belediyesi Hal Fiyatları Map'i
 const CROP_SEARCH_MAP = {
-    'crop_tomato': 'DOMATES',
-    'crop_cucumber': 'SALATALIK',
-    'crop_pepper': 'BİBER',
-    'crop_red_pepper': 'KAPYA',
-    'crop_eggplant': 'PATLICAN',
-    'crop_lettuce': 'MARUL',
-    'crop_spinach': 'ISPANAK',
-    'crop_potato': 'PATATES',
-    'crop_onion': 'SOĞAN',
-    'crop_lemon': 'LİMON',
-    'crop_apple': 'ELMA',
-    'crop_watermelon': 'KARPUZ',
-    'crop_melon': 'KAVUN',
-    'crop_carrot': 'HAVUÇ',
-    'crop_cabbage': 'LAHANA',
-    'crop_zucchini': 'KABAK',
-    'crop_beans': 'FASULYE',
-    'crop_parsley': 'MAYDANOZ',
+    'crop_tomato': ['DOMATES', 'DOMATES (Biftek)', 'DOMATES (Salkım)'],
+    'crop_cucumber': ['SALATALIK', 'SALATALIK (Slor)'],
+    'crop_pepper': ['BİBER (Sivri)', 'BİBER (Çarliston)', 'BİBER (Sivri Kıl)'],
+    'crop_red_pepper': ['BİBER (Kapya)', 'BİBER (Kırmızı)'],
+    'crop_eggplant': ['PATLICAN', 'PATLICAN (Sivri)'],
+    'crop_lettuce': ['MARUL (Düz)', 'MARUL (Kıvırcık)', 'MARUL'],
+    'crop_spinach': ['ISPANAK'],
+    'crop_potato': ['PATATES'],
+    'crop_onion': ['SOĞAN (Kuru)', 'SOĞAN (Taze)'],
+    'crop_lemon': ['LİMON'],
+    'crop_apple': ['ELMA'],
+    'crop_watermelon': ['KARPUZ'],
+    'crop_melon': ['KAVUN'],
+    'crop_carrot': ['HAVUÇ'],
+    'crop_cabbage': ['LAHANA (Beyaz)', 'LAHANA'],
+    'crop_zucchini': ['KABAK (Bal)', 'KABAK'],
+    'crop_beans': ['FASULYE (Sırık)', 'FASULYE'],
+    'crop_parsley': ['MAYDANOZ'],
 };
 
 async function scrape() {
-    console.log("Starting stealth scraper...");
+    console.log("Starting DIRECT OFFICIAL scraper...");
 
-    // Launch headless browser
     const browser = await puppeteer.launch({
-        headless: true, // "new" is the default in newer puppeteer versions
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-web-security',
+            '--disable-features=IsolateOrigins,site-per-process'
+        ]
     });
 
     const page = await browser.newPage();
 
-    // Set a random user agent to be safe, though stealth plugin helps
+    // Rastgele fakat inandirici bir User Agent
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
     try {
-        console.log("Fetching HTML via AllOrigins to bypass DNS blocks...");
+        console.log("Navigating to Official Antalya Municipality Hal Fiyatlari API...");
 
-        await page.goto("about:blank");
-
-        const html = await page.evaluate(async () => {
-            const response = await fetch("https://api.allorigins.win/raw?url=https://www.halfiyatlari.net/antalya-hal-fiyatlari/", {
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                }
-            });
-            return await response.text();
+        // Antalya Büyükşehir Belediyesi Hal Kayıt Sisteminin (veya bilinen diğer apilerin) 
+        // bot koruması olmayan en güncel ve risksiz verisi: Tarım Orman Bakanlığı Hal Sistemi / Belediyesi
+        // NOT: Belediyenin tablosu dinamiktir, Javascript render eder. Timeout'u yüksek tutuyoruz.
+        await page.goto("https://www.antalya.bel.tr/has/hal-fiyatlari", {
+            waitUntil: 'networkidle2',
+            timeout: 60000
         });
 
-        console.log("HTML fetched successfully. Parsing tables...");
+        console.log("Page loaded. Waiting for table to render...");
+
+        // Tablo yüklenmesini 5 saniye bekle
+        await new Promise(r => setTimeout(r, 5000));
+
+        const html = await page.content();
         const $ = cheerio.load(html);
 
         const updates = [];
         console.log("Parsing tables...");
 
-        for (const [cropId, searchName] of Object.entries(CROP_SEARCH_MAP)) {
+        for (const [cropId, searchNames] of Object.entries(CROP_SEARCH_MAP)) {
             let minPrice = 0;
             let maxPrice = 0;
             let found = false;
 
             $('table tr').each((_, element) => {
-                const rowText = $(element).text().toUpperCase();
+                const textText = $(element).text().toUpperCase();
 
-                if (!found && rowText.includes(searchName)) {
+                // Eğer ürün bu satırda varsa (herhangi bir alt varyantına uyuyorsa)
+                const isMatch = searchNames.some(name => textText.includes(name.toUpperCase()));
+
+                if (!found && isMatch) {
                     const cols = $(element).find('td');
-                    if (cols.length >= 3) {
-                        const minStr = $(cols[1]).text().replace(/[^0-9,]/g, '').replace(',', '.');
-                        const maxStr = $(cols[2]).text().replace(/[^0-9,]/g, '').replace(',', '.');
+                    // Antalya.bel.tr formatı genellikle 1. sütun Ürün Adı, 2. Unitesi, 3. En Düşük, 4. En Yüksek
+                    // Biz olası fiyat sütunlarına bakıyoruz
+                    if (cols.length >= 4) {
+                        const minStr = $(cols[2]).text().replace(/[^0-9,]/g, '').replace(',', '.');
+                        const maxStr = $(cols[3]).text().replace(/[^0-9,]/g, '').replace(',', '.');
 
                         minPrice = parseFloat(minStr) || 0;
                         maxPrice = parseFloat(maxStr) || 0;
@@ -101,14 +113,14 @@ async function scrape() {
                     crop_id: cropId,
                     price_per_kg_min: minPrice,
                     price_per_kg_max: maxPrice > minPrice ? maxPrice : minPrice,
-                    market_name: 'Antalya Hal (Scraped)',
+                    market_name: 'Antalya BB Resmi Verisi',
                     last_updated: new Date().toISOString()
                 });
-                console.log(`Scraped ${searchName}: Min ₺${minPrice}, Max ₺${maxPrice}`);
+                console.log(`Scraped ${searchNames[0]}: Min ₺${minPrice}, Max ₺${maxPrice}`);
             }
         }
 
-        console.log(`Successfully parsed ${updates.length} items from the site.`);
+        console.log(`Successfully parsed ${updates.length} dynamic items from the site.`);
 
         // TMO
         const tmoDefaults = [
@@ -151,7 +163,6 @@ async function scrape() {
     } finally {
         await browser.close();
         console.log("Browser closed. Exiting process.");
-        // Give time for Supabase to finish requests before exiting
         setTimeout(() => process.exit(0), 1000);
     }
 }
