@@ -53,14 +53,20 @@ async function scrape() {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
     try {
-        console.log("Navigating to halfiyatlari.net...");
-        await page.goto("https://www.halfiyatlari.net/antalya-hal-fiyatlari/", {
-            waitUntil: 'networkidle2',
-            timeout: 60000
+        console.log("Fetching HTML via AllOrigins to bypass DNS blocks...");
+
+        await page.goto("about:blank");
+
+        const html = await page.evaluate(async () => {
+            const response = await fetch("https://api.allorigins.win/raw?url=https://www.halfiyatlari.net/antalya-hal-fiyatlari/", {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+            });
+            return await response.text();
         });
 
-        console.log("Page loaded. Extracting HTML...");
-        const html = await page.content();
+        console.log("HTML fetched successfully. Parsing tables...");
         const $ = cheerio.load(html);
 
         const updates = [];
