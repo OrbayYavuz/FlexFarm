@@ -1,0 +1,34 @@
+name: Daily Market Scraper
+
+on:
+  schedule:
+    # Runs every day at 04:00 UTC (07:00 Turkey Time) to fetch the fresh morning prices
+    - cron: '0 4 * * *'
+  # Allows you to trigger the workflow manually from the GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  scrape-prices:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          cd scripts/bot
+          npm install
+
+      - name: Run Scraper Bot
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd scripts/bot
+          node daily_scraper.js
