@@ -23,7 +23,8 @@ jobs:
       - name: Install dependencies
         run: |
           cd scripts/bot
-          npm install
+          npm uninstall puppeteer puppeteer-extra puppeteer-extra-plugin-stealth
+          npm install cheerio @supabase/supabase-js dotenv
 
       - name: Run Scraper Bot
         env:
