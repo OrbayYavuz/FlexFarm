@@ -32,61 +32,55 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Environment variables removal - No longer needed
-
-
-  // Firebase'i başlat
-  try {
-    await Firebase.initializeApp();
-    print('Firebase initialized successfully');
-  } catch (e) {
-    print('Warning: Firebase initialization failed: $e');
-  }
-  
-  // Supabase'i başlat
-  try {
-    await Supabase.initialize(
-      url: SupabaseConfig.supabaseUrl,
-      anonKey: SupabaseConfig.supabaseAnonKey,
-    );
-    // print('Supabase initialized successfully');
-  } catch (e) {
-    // print('ERROR: Supabase initialization failed: $e');
-    // Uygulama çalışmaya devam edecek
-  }
+  // Firebase ve Supabase'i PARALEL başlat (sıralı değil - 2-3 sn kazanç)
+  await Future.wait([
+    // Firebase başlatma
+    () async {
+      try {
+        await Firebase.initializeApp();
+      } catch (e) {
+        if (kDebugMode) print('Warning: Firebase init failed: $e');
+      }
+    }(),
+    // Supabase başlatma
+    () async {
+      try {
+        await Supabase.initialize(
+          url: SupabaseConfig.supabaseUrl,
+          anonKey: SupabaseConfig.supabaseAnonKey,
+        );
+      } catch (e) {
+        if (kDebugMode) print('Warning: Supabase init failed: $e');
+      }
+    }(),
+  ]);
  
-  // Bildirim servisini başlat
+  // Bildirim + FCM PARALEL başlat
   try {
-    await NotificationService.initialize(
-      onNotificationTap: (payload) {
-        if (payload != null && payload.startsWith('chat|')) {
-          final parts = payload.split('|');
-          if (parts.length >= 5) {
-            final listingId = parts[1];
-            final otherUserId = parts[2];
-            final otherUserName = parts[3];
-            final listingTitle = parts[4];
-            
-            navigatorKey.currentState?.push(
-              PageTransitions.modernSlideTransition(
-                page: ChatScreen(
-                  listingId: listingId,
-                  otherUserId: otherUserId,
-                  otherUserName: otherUserName,
-                  listingTitle: listingTitle,
+    await Future.wait([
+      NotificationService.initialize(
+        onNotificationTap: (payload) {
+          if (payload != null && payload.startsWith('chat|')) {
+            final parts = payload.split('|');
+            if (parts.length >= 5) {
+              navigatorKey.currentState?.push(
+                PageTransitions.modernSlideTransition(
+                  page: ChatScreen(
+                    listingId: parts[1],
+                    otherUserId: parts[2],
+                    otherUserName: parts[3],
+                    listingTitle: parts[4],
+                  ),
                 ),
-              ),
-            );
+              );
+            }
           }
-        }
-      },
-    );
-    
-    // FCM (Firebase Cloud Messaging) Başlat
-    await FCMService.initialize();
-    
+        },
+      ),
+      FCMService.initialize(),
+    ]);
   } catch (e) {
-    print('Warning: Notification service initialization failed: $e');
+    if (kDebugMode) print('Warning: Notification init failed: $e');
   }
   
   runApp(const FlexTarmApp());

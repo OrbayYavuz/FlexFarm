@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/user_activity_service.dart';
@@ -49,11 +50,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeServices(); // Servisleri başlat
     _initializeUserData();
-    // Timer'ı başlat
     _startWeatherUpdateTimer();
-    _setupMessageListener(); // Mesaj dinlemeye başla
+    _setupMessageListener();
   }
 
   @override
@@ -63,10 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // Gerekli servisleri başlat
-  Future<void> _initializeServices() async {
-    await NotificationService.initialize();
-  }
+  // NotificationService zaten main.dart'ta başlatılıyor, tekrar çağırmaya gerek yok
 
   // Gelen mesajları dinle
   void _setupMessageListener() {
@@ -134,44 +130,42 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initializeUserData() async {
     try {
-      // Profil oluştur
-      await SupabaseAuthService.createProfileForCurrentUser();
+      // Profil + kullanıcı verisi + hava durumu PARALEL yükle
+      await Future.wait([
+        SupabaseAuthService.createProfileForCurrentUser().catchError((e) {
+          if (kDebugMode) print('Profil oluşturma hatası: $e');
+        }),
+        UserActivityService.loadUserData().catchError((e) {
+          if (kDebugMode) print('Kullanıcı verisi hatası: $e');
+          return <String, dynamic>{};
+        }),
+        _loadWeatherDataOnce(),
+      ]);
       
-      // Kullanıcı verilerini yükle
-      final userData = await UserActivityService.loadUserData();
-      
-      // Kaydedilmiş şehri al ve hava durumu verilerini çek (sadece bir kez)
-      await _loadWeatherDataOnce();
-      
-      setState(() {
-        _isLoadingUserData = false;
-      });
-      
-      print('Kullanıcı verileri yüklendi:');
-      print('- Favoriler: ${userData['favorites'].length}');
-      print('- Tercihler: ${userData['preferences'].length}');
-      print('- Son aktiviteler: ${userData['recentActivity'].length}');
-      
+      if (mounted) {
+        setState(() {
+          _isLoadingUserData = false;
+        });
+      }
     } catch (e) {
-      print('Kullanıcı verileri yüklenirken hata: $e');
-      setState(() {
-        _isLoadingUserData = false;
-      });
+      if (kDebugMode) print('Kullanıcı verileri yüklenirken hata: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingUserData = false;
+        });
+      }
     }
   }
 
   // Sadece bir kez yükle ve sonra cache'den al
   Future<void> _loadWeatherDataOnce() async {
     try {
-      // Kaydedilmiş şehri al
       final savedCity = await UserActivityService.getPreference('city');
       if (savedCity != null && savedCity.isNotEmpty) {
         _currentCity = savedCity;
         
-        // Şehir koordinatlarını al
         final coordinates = await WeatherService.getCityCoordinates(savedCity);
         if (coordinates != null) {
-          // Hava durumu verilerini al
           final weatherData = await WeatherService.getCurrentWeather(
             latitude: coordinates['latitude']!,
             longitude: coordinates['longitude']!,
@@ -179,17 +173,18 @@ class _HomeScreenState extends State<HomeScreen> {
           
           if (weatherData != null && weatherData['current'] != null) {
             final current = weatherData['current'];
-            setState(() {
-              _currentTemperature = (current['temperature_2m'] as num?)?.toDouble();
-              _weatherCode = current['weather_code'] as int?;
-              _lastWeatherLoad = DateTime.now();
-            });
-            print('🏠 Home screen hava durumu verisi yüklendi ve cache\'e kaydedildi');
+            if (mounted) {
+              setState(() {
+                _currentTemperature = (current['temperature_2m'] as num?)?.toDouble();
+                _weatherCode = current['weather_code'] as int?;
+                _lastWeatherLoad = DateTime.now();
+              });
+            }
           }
         }
       }
     } catch (e) {
-      print('Hava durumu verisi yüklenirken hata: $e');
+      if (kDebugMode) print('Hava durumu verisi yüklenirken hata: $e');
     }
   }
 
@@ -198,7 +193,6 @@ class _HomeScreenState extends State<HomeScreen> {
     Timer.periodic(_weatherCacheDuration, (timer) {
       if (mounted && _currentCity != null) {
         _loadWeatherDataOnce();
-        print('🔄 Home screen hava durumu otomatik güncellendi');
       }
     });
   }

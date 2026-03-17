@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:async'; // Timer için
 import '../services/weather_service.dart';
@@ -44,7 +45,6 @@ class _WeatherScreenState extends State<WeatherScreen> with TickerProviderStateM
     // Her 10 dakikada bir verileri güncelle
     _refreshTimer = Timer.periodic(const Duration(minutes: 10), (timer) {
       if (_selectedCity != null) {
-        print('⏰ Otomatik hava durumu güncellemesi başlatılıyor...');
         _loadWeatherData(_selectedCity!);
       }
     });
@@ -68,27 +68,21 @@ class _WeatherScreenState extends State<WeatherScreen> with TickerProviderStateM
         await _loadWeatherData(savedCity);
       }
     } catch (e) {
-      print('Kaydedilmiş şehir yüklenemedi: $e');
+      if (kDebugMode) print('Kaydedilmiş şehir yüklenemedi: $e');
     }
   }
 
   // Hava durumu verilerini yükle
   Future<void> _loadWeatherData(String cityName) async {
-    print('🌤️ Hava durumu verisi yükleniyor: $cityName');
-    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      print('📍 Şehir koordinatları alınıyor...');
-      // Şehir koordinatlarını al
       final coordinates = await WeatherService.getCityCoordinates(cityName);
-      print('📍 Koordinatlar: $coordinates');
       
       if (coordinates == null) {
-        print('❌ Şehir koordinatları bulunamadı');
         setState(() {
           _errorMessage = 'Şehir bulunamadı: $cityName';
           _isLoading = false;
@@ -96,37 +90,30 @@ class _WeatherScreenState extends State<WeatherScreen> with TickerProviderStateM
         return;
       }
 
-      print('🌤️ Hava durumu verisi alınıyor...');
-      // Hava durumu verilerini al
-      final weatherData = await WeatherService.getCurrentWeather(
-        latitude: coordinates['latitude']!,
-        longitude: coordinates['longitude']!,
-      );
-      print('🌤️ Hava durumu verisi: $weatherData');
+      // Hava durumu + tarımsal veriyi PARALEL yükle
+      final results = await Future.wait([
+        WeatherService.getCurrentWeather(
+          latitude: coordinates['latitude']!,
+          longitude: coordinates['longitude']!,
+        ),
+        WeatherService.getAgriculturalWeather(
+          latitude: coordinates['latitude']!,
+          longitude: coordinates['longitude']!,
+        ),
+      ]);
 
-      print('🌾 Tarımsal veri alınıyor...');
-      final agriculturalData = await WeatherService.getAgriculturalWeather(
-        latitude: coordinates['latitude']!,
-        longitude: coordinates['longitude']!,
-      );
-      print('🌾 Tarımsal veri: $agriculturalData');
-
-      print('💾 Veriler kaydediliyor...');
       setState(() {
-        _currentWeather = weatherData;
-        _agriculturalWeather = agriculturalData;
-        _selectedCity = cityName; // Şehir adını güncelle
+        _currentWeather = results[0];
+        _agriculturalWeather = results[1];
+        _selectedCity = cityName;
         _isLoading = false;
       });
 
-      // Şehri kaydet
       await UserActivityService.updatePreference(key: 'city', value: cityName);
-      print('✅ Şehir tercihi kaydedildi');
 
       _animationController.forward();
-      print('🎉 Hava durumu başarıyla yüklendi!');
     } catch (e) {
-      print('❌ Hata oluştu: $e');
+      if (kDebugMode) print('Hava durumu hatası: $e');
       setState(() {
         _errorMessage = 'Hava durumu verisi alınamadı: $e';
         _isLoading = false;
