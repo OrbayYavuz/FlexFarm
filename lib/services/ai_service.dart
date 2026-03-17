@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import '../models/crop_guide.dart';
 import 'secure_api_service.dart';
 
@@ -212,19 +213,55 @@ Lütfen çok kısa, madde madde, heyecan verici ve net bir Türkçe ile yanıtla
     }
   }
 
-  static Future<String> analyzePlantImage(Uint8List imageBytes) async {
-    // API key is now securely stored in Supabase Edge Functions
-    
+  /// Görüntüyü sıkıştırarak boyutunu küçültür (API payload limiti için)
+  static Future<Uint8List> _compressImage(Uint8List imageBytes) async {
     try {
+      // Decode the image
+      final codec = await ui.instantiateImageCodec(
+        imageBytes,
+        targetWidth: 800, // Max 800px genişlik
+      );
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+
+      // Encode to JPEG with quality 75
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      
+      if (byteData != null) {
+        return byteData.buffer.asUint8List();
+      }
+      return imageBytes; // Fallback: orijinal görüntüyü döndür
+    } catch (e) {
+      print('Görüntü sıkıştırma hatası: $e');
+      return imageBytes; // Fallback: orijinal görüntüyü döndür
+    }
+  }
+
+  static Future<String> analyzePlantImage(Uint8List imageBytes) async {
+    try {
+      // Görüntüyü sıkıştır (büyük kamera fotoğrafları için)
+      final compressedBytes = await _compressImage(imageBytes);
+      
       // Convert image to base64
-      final String base64Image = base64Encode(imageBytes);
+      final String base64Image = base64Encode(compressedBytes);
 
       final response = await SecureApiService.invokeGroq({
-          'model': 'llama-3.2-11b-vision-preview', // Vision yeteneği olan model
+          'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
           'messages': [
             {
               'role': 'system',
-              'content': 'Bu fotoğraftaki bitkiyi detaylı olarak analiz et. Türkiye tarım koşullarına göre değerlendirme yap. Bitki türü, sağlık durumu, hastalık belirtileri, gübreleme önerileri ve hasat bilgisi içeren detaylı bir rapor hazırla. Türkçe ve anlaşılır bir dil kullan.'
+              'content': '''Sen Türkiye'de tarım alanında uzman bir bitki tanıma ve teşhis yapay zekasısın.
+Kullanıcının gönderdiği bitki fotoğrafını analiz ederek şu başlıklarda detaylı rapor hazırla:
+
+🌿 **Bitki Türü:** Bitkinin adını ve ailesini belirt.
+🩺 **Sağlık Durumu:** Bitkinin genel sağlığını değerlendir.
+🦠 **Hastalık Tespiti:** Varsa hastalık belirtilerini ve çözüm önerilerini yaz.
+💧 **Sulama Önerisi:** Bu bitkiye uygun sulama programını öner.
+🧪 **Gübreleme:** Hangi gübre ne zaman uygulanmalı.
+📅 **Hasat Bilgisi:** Tahmini hasat zamanı ve dikkat edilmesi gerekenler.
+
+Türkçe, sade ve çiftçinin anlayacağı bir dil kullan. Emoji kullanarak görsel olarak zenginleştir.'''
             },
             {
               'role': 'user',
@@ -246,14 +283,18 @@ Lütfen çok kısa, madde madde, heyecan verici ve net bir Türkçe ile yanıtla
           'max_tokens': 2048,
         });
 
+      if (response['error'] != null) {
+        return '❌ AI Analiz Hatası: ${response['error']}\n\nLütfen tekrar deneyin.';
+      }
+
       if (response['choices'] != null && response['choices'].isNotEmpty) {
         return response['choices'][0]['message']['content'];
       } else {
-         return 'Görüntü analizi yapılırken beklenmeyen bir yanıt alındı.';
+         return '⚠️ Görüntü analizi yapılırken beklenmeyen bir yanıt alındı. Lütfen tekrar deneyin.';
       }
 
     } catch (e) {
-      return 'Görüntü analizi servisine bağlanırken bir hata oluştu: ${e.toString()}\n\nLütfen internet bağlantınızı kontrol edin ve tekrar deneyin.';
+      return '❌ Görüntü analizi servisine bağlanırken bir hata oluştu.\n\n🔍 Hata detayı: ${e.toString()}\n\n💡 Lütfen internet bağlantınızı kontrol edin ve tekrar deneyin.';
     }
   }
   

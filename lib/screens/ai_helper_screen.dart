@@ -107,16 +107,132 @@ class _AIHelperScreenState extends State<AIHelperScreen> with TickerProviderStat
     }
   }
   
-  void _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+  void _pickImage() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Text(
+              '📸 Bitki Fotoğrafı Seç',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Bitkinin fotoğrafını çekin veya galeriden seçin',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildImageSourceButton(
+                    icon: Icons.camera_alt_rounded,
+                    label: 'Kamera',
+                    color: AppTheme.primaryColor,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _processImage(ImageSource.camera);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildImageSourceButton(
+                    icon: Icons.photo_library_rounded,
+                    label: 'Galeri',
+                    color: Colors.orange,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _processImage(ImageSource.gallery);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageSourceButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 40, color: color),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _processImage(ImageSource source) async {
+    final XFile? image = await _picker.pickImage(
+      source: source,
+      maxWidth: 800,
+      imageQuality: 75,
+    );
     if (image != null) {
+      final Uint8List imageBytes = await image.readAsBytes();
+      final String base64Thumb = base64Encode(imageBytes);
+
       setState(() {
+        // Kullanıcının gönderdiği fotoğrafı chat'e ekle
+        _messages.add({
+          'text': '📸 Bitki fotoğrafı gönderildi',
+          'isUser': 'true',
+          'image': base64Thumb,
+        });
         _isLoading = true;
       });
-      
-      final Uint8List imageBytes = await image.readAsBytes();
+      _saveMessages();
+
       final aiResponse = await AIService.analyzePlantImage(imageBytes);
-      
+
       if (mounted) {
         setState(() {
           _messages.add({
@@ -125,7 +241,7 @@ class _AIHelperScreenState extends State<AIHelperScreen> with TickerProviderStat
           });
           _isLoading = false;
         });
-        _saveMessages(); // Save analysis result
+        _saveMessages();
       }
     }
   }
@@ -346,6 +462,7 @@ class _AIHelperScreenState extends State<AIHelperScreen> with TickerProviderStat
 
   Widget _buildMessageBubble(Map<String, String> message) {
     final isUser = message['isUser'] == 'true';
+    final hasImage = message['image'] != null && message['image']!.isNotEmpty;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -378,14 +495,45 @@ class _AIHelperScreenState extends State<AIHelperScreen> with TickerProviderStat
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: AppTheme.cardShadow,
               ),
-              child: Text(
-                message['text']!,
-                style: TextStyle(
-                  color: isUser ? Colors.white : AppTheme.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  height: 1.4,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Fotoğraf varsa thumbnail göster
+                  if (hasImage) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.memory(
+                        base64Decode(message['image']!),
+                        width: 200,
+                        height: 200,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 200,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.image, color: Colors.white70, size: 40),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Text(
+                    message['text']!,
+                    style: TextStyle(
+                      color: isUser ? Colors.white : AppTheme.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -443,7 +591,7 @@ class _AIHelperScreenState extends State<AIHelperScreen> with TickerProviderStat
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text('AI düşünüyor...'),
+                const Text('🌿 Bitki analiz ediliyor...'),
               ],
             ),
           ),
