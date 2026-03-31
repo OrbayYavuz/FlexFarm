@@ -32,61 +32,55 @@ void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Environment variables removal - No longer needed
-
-
-  // Firebase'i başlat
-  try {
-    await Firebase.initializeApp();
-    print('Firebase initialized successfully');
-  } catch (e) {
-    print('Warning: Firebase initialization failed: $e');
-  }
-  
-  // Supabase'i başlat
-  try {
-    await Supabase.initialize(
-      url: SupabaseConfig.supabaseUrl,
-      anonKey: SupabaseConfig.supabaseAnonKey,
-    );
-    // print('Supabase initialized successfully');
-  } catch (e) {
-    // print('ERROR: Supabase initialization failed: $e');
-    // Uygulama çalışmaya devam edecek
-  }
+  // Firebase ve Supabase'i PARALEL başlat (sıralı değil - 2-3 sn kazanç)
+  await Future.wait([
+    // Firebase başlatma
+    () async {
+      try {
+        await Firebase.initializeApp();
+      } catch (e) {
+        if (kDebugMode) print('Warning: Firebase init failed: $e');
+      }
+    }(),
+    // Supabase başlatma
+    () async {
+      try {
+        await Supabase.initialize(
+          url: SupabaseConfig.supabaseUrl,
+          anonKey: SupabaseConfig.supabaseAnonKey,
+        );
+      } catch (e) {
+        if (kDebugMode) print('Warning: Supabase init failed: $e');
+      }
+    }(),
+  ]);
  
-  // Bildirim servisini başlat
+  // Bildirim + FCM PARALEL başlat
   try {
-    await NotificationService.initialize(
-      onNotificationTap: (payload) {
-        if (payload != null && payload.startsWith('chat|')) {
-          final parts = payload.split('|');
-          if (parts.length >= 5) {
-            final listingId = parts[1];
-            final otherUserId = parts[2];
-            final otherUserName = parts[3];
-            final listingTitle = parts[4];
-            
-            navigatorKey.currentState?.push(
-              PageTransitions.modernSlideTransition(
-                page: ChatScreen(
-                  listingId: listingId,
-                  otherUserId: otherUserId,
-                  otherUserName: otherUserName,
-                  listingTitle: listingTitle,
+    await Future.wait([
+      NotificationService.initialize(
+        onNotificationTap: (payload) {
+          if (payload != null && payload.startsWith('chat|')) {
+            final parts = payload.split('|');
+            if (parts.length >= 5) {
+              navigatorKey.currentState?.push(
+                PageTransitions.modernSlideTransition(
+                  page: ChatScreen(
+                    listingId: parts[1],
+                    otherUserId: parts[2],
+                    otherUserName: parts[3],
+                    listingTitle: parts[4],
+                  ),
                 ),
-              ),
-            );
+              );
+            }
           }
-        }
-      },
-    );
-    
-    // FCM (Firebase Cloud Messaging) Başlat
-    await FCMService.initialize();
-    
+        },
+      ),
+      FCMService.initialize(),
+    ]);
   } catch (e) {
-    print('Warning: Notification service initialization failed: $e');
+    if (kDebugMode) print('Warning: Notification init failed: $e');
   }
   
   runApp(const FlexTarmApp());
@@ -119,69 +113,65 @@ class AuthWrapper extends StatelessWidget {
     return StreamBuilder<AuthState>(
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        // Loading state - Splash Screen
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Logo - Bigger size
-                  Container(
-                    width: 250,
-                    height: 250,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(125),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+            body: Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/images/splash_bg.png'),
+                  fit: BoxFit.cover,
+                ),
+              ),
+              child: Container(
+                // İsteğe bağlı, yazının daha iyi okunması için hafif karartma
+                color: Colors.black.withValues(alpha: 0.3),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 100), // Logonun eskiden olduğu boşluk
+                    // App Name
+                    const Text(
+                      'FLEX FARM',
+                      style: TextStyle(
+                        fontSize: 42,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 2.0,
+                        shadows: [
+                          Shadow(
+                            blurRadius: 10.0,
+                            color: Colors.black45,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Image.asset(
-                      'assets/images/splash_logo.png',
-                      fit: BoxFit.contain,
-                      width: 250,
-                      height: 250,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.agriculture,
-                          size: 100,
-                          color: Colors.green[700],
-                        );
-                      },
+                    const SizedBox(height: 15),
+                    const Text(
+                      'Tar\u0131m Yapay Zeka Asistan\u0131',
+                      style: TextStyle(
+                        fontSize: 20,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        shadows: [
+                          Shadow(
+                            blurRadius: 8.0,
+                            color: Colors.black45,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  // App Name
-                  Text(
-                    'FLEX FARM',
-                    style: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green[700],
+                    const SizedBox(height: 60),
+                    // Loading indicator
+                    const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      strokeWidth: 3,
                     ),
-                  ),
-                  const SizedBox(height: 15),
-                  Text(
-                    'Tarım Yapay Zeka Asistanı',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  // Loading indicator
-                  CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.green[700]!),
-                    strokeWidth: 3,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
